@@ -11,6 +11,9 @@
 html,body{height:100%;margin:0}
 body{background:var(--bg);color:var(--ink);font:13px/1.4 system-ui,Segoe UI,Roboto,sans-serif;display:grid;grid-template-columns:310px 1fr;overflow:hidden}
 aside{background:var(--panel);border-right:1px solid var(--line);overflow-y:auto;padding:12px 12px 24px}
+body.noSide{grid-template-columns:1fr}
+body.noSide aside{display:none}
+#bSide{min-width:34px}
 h1{font-size:15px;margin:0 0 2px}
 h2{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:16px 0 6px}
 .sub{color:var(--muted);font-size:12px}
@@ -24,6 +27,7 @@ button{cursor:pointer}
 button:hover{border-color:var(--accent)}
 button.on{background:var(--accent);color:var(--accentInk);border-color:var(--accent)}
 button.danger:hover{border-color:#dc2626;color:#dc2626}
+button:disabled{opacity:.45;cursor:default;border-color:var(--line)}
 .btns{display:flex;flex-wrap:wrap;gap:6px}
 main{display:grid;grid-template-rows:auto 1fr auto;min-width:0;min-height:0}
 #bar{display:flex;gap:6px;padding:8px 10px;border-bottom:1px solid var(--line);background:var(--panel);flex-wrap:wrap;align-items:center}
@@ -46,10 +50,22 @@ td input{width:100%;padding:2px 3px}
 details summary{cursor:pointer;color:var(--muted);font-size:11px;letter-spacing:.06em;text-transform:uppercase;margin:16px 0 6px}
 .tiny{font-size:11px;color:var(--muted)}
 .key{display:inline-block;border:1px solid var(--line);border-radius:4px;padding:0 4px;font-size:11px;background:var(--field)}
+dialog#devDlg{border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);padding:0;width:min(660px,calc(100vw - 32px));max-height:calc(100vh - 32px);overflow:auto}
+dialog#devDlg::backdrop{background:rgba(0,0,0,.4)}
+.dlgHead{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line);background:var(--panel);font-size:14px}
+.dlgBody{display:grid;grid-template-columns:230px 1fr;gap:14px;padding:12px}
+.dlgFoot{padding:0 12px 12px}
+@media (max-width:600px){.dlgBody{grid-template-columns:1fr}}
+#dvList{max-height:300px;overflow-y:auto;margin-bottom:6px}
+.dvItem{display:block;width:100%;text-align:left;margin-bottom:4px}
+.dvItem .tiny{display:block}
+.dvItem.on .tiny{color:inherit;opacity:.85}
+.dvEmpty{border:1px dashed var(--line);border-radius:8px;padding:10px;margin-bottom:6px}
+.dlgEdit .row>label{flex-basis:130px}
 </style>
 </head>
 <body>
-<aside>
+<aside id="side">
   <h1>SignalSketch</h1>
   <div class="sub">Wi-Fi / 4G / 5G indoor coverage on your floor plan</div>
 
@@ -99,7 +115,7 @@ details summary{cursor:pointer;color:var(--muted);font-size:11px;letter-spacing:
   <div class="row"><label>Target area %</label><input id="apTarget" type="number" min="10" max="100" step="1" value="95"></div>
   <div class="row"><label>Max new markers</label><input id="apMax" type="number" min="1" max="60" step="1" value="12"></div>
   <div class="row"><label>Grid spacing (m)</label><input id="apStep" type="number" min="0.5" step="0.5" placeholder="auto"></div>
-  <div class="row"><label>EIRP dBm</label><input id="apEirp" type="number" step="1" placeholder="as existing / default"></div>
+  <div class="row"><label>EIRP dBm</label><input id="apEirp" type="number" step="1" placeholder="device / existing / default" title="Empty: the device chosen in the toolbar if it is on this layer, else an existing marker on this layer, else the layer default"></div>
   <div class="row"><label>Keep existing</label><input id="apKeep" type="checkbox" checked><span class="tiny">this layer's markers stay and count</span></div>
   <div class="row"><label>Avoid zones</label><input id="apZones" type="checkbox" checked><span class="tiny">no markers inside equipment zones</span></div>
   <div class="btns"><button id="apRun">Suggest placement</button><button id="apStop" disabled>Stop</button><button id="apRemove" class="danger">Remove suggested</button></div>
@@ -131,12 +147,14 @@ details summary{cursor:pointer;color:var(--muted);font-size:11px;letter-spacing:
   </details>
 
   <h2>Keys</h2>
-  <div class="tiny"><span class="key">V</span> select <span class="key">W</span> wall <span class="key">M</span> marker <span class="key">C</span> calibrate <span class="key">P</span> measurement<br>
+  <div class="tiny"><span class="key">V</span> select <span class="key">W</span> wall <span class="key">M</span> marker <span class="key">C</span> calibrate <span class="key">P</span> measurement <span class="key">B</span> sidebar<br>
   <span class="key">Space</span>+drag or middle-drag pans, wheel zooms, <span class="key">Del</span> deletes, <span class="key">Esc</span> ends, <span class="key">Ctrl+Z / Y</span> undo/redo, <span class="key">Shift</span> locks wall angle.</div>
 </aside>
 
 <main>
   <div id="bar">
+    <button id="bSide" aria-controls="side" aria-expanded="true" title="Hide the sidebar (B)">◀</button>
+    <span class="sep"></span>
     <button data-tool="select">Select (V)</button>
     <button data-tool="wall">Draw wall (W)</button>
     <select id="wallMat" title="Material for new walls"></select>
@@ -144,7 +162,8 @@ details summary{cursor:pointer;color:var(--muted);font-size:11px;letter-spacing:
     <select id="zoneKind" title="Zone type"></select>
     <span class="sep"></span>
     <button data-tool="marker">Place marker (M)</button>
-    <select id="markType" title="Marker type"></select>
+    <select id="markType" title="Marker type or one of your devices"></select>
+    <button id="bDevices" title="Define your own devices: frequency, Tx power, antenna gain, cable loss">My devices…</button>
     <span class="sep"></span>
     <button data-tool="calib">Set scale (C)</button>
     <button data-tool="pin">Add measurement (P)</button>
@@ -160,6 +179,30 @@ details summary{cursor:pointer;color:var(--muted);font-size:11px;letter-spacing:
   </div>
   <div id="status"><span id="msg">Ready</span><span id="pos"></span></div>
 </main>
+
+<dialog id="devDlg" aria-labelledby="dvTitle">
+  <div class="dlgHead"><b id="dvTitle">My devices</b><button type="button" id="dvClose" title="Close (Esc)">✕</button></div>
+  <div class="dlgBody">
+    <div>
+      <div id="dvList"></div>
+      <div class="btns"><button type="button" id="dvNew">+ New device</button><button type="button" id="dvImport">Import…</button><button type="button" id="dvExport">Export</button></div>
+      <input type="file" id="fDev" accept=".json,application/json" hidden>
+    </div>
+    <div class="dlgEdit">
+      <div class="row"><label for="dvName">Name</label><input id="dvName" maxlength="60" placeholder="e.g. Ceiling AP 5 GHz"></div>
+      <div class="row"><label for="dvLayer">Technology</label><select id="dvLayer"></select></div>
+      <div class="row"><label for="dvFreq">Frequency MHz</label><input id="dvFreq" type="number" min="100" step="1" list="dvFl"><datalist id="dvFl"></datalist></div>
+      <div class="row"><label for="dvTx">Tx power dBm</label><input id="dvTx" type="number" step="0.5"></div>
+      <div class="row"><label for="dvGain">Antenna gain dBi</label><input id="dvGain" type="number" step="0.5"></div>
+      <div class="row"><label for="dvLoss">Cable / other loss dB</label><input id="dvLoss" type="number" step="0.5" min="0"></div>
+      <div class="card">EIRP <span id="dvEirp" class="big">–</span> dBm
+        <div class="tiny">EIRP = Tx power + antenna gain − losses. The heatmap uses this value. Antennas are treated as omnidirectional.</div></div>
+      <div id="dvUse" class="tiny"></div>
+      <div class="btns" style="margin-top:8px"><button type="button" id="dvSave" class="on">Save device</button><button type="button" id="dvDup">Duplicate</button><button type="button" id="dvDel" class="danger">Delete</button></div>
+    </div>
+  </div>
+  <div class="dlgFoot tiny">Devices are kept in this browser and inside saved project files. Use Export / Import to share a device list with colleagues.</div>
+</dialog>
 
 <script>
 "use strict";
@@ -197,12 +240,13 @@ const LAYERS={
   lte:{name:'4G LTE',short:'4G',freq:1800,eirp:30,shape:'square',color:'#f59e0b',lo:-130,hi:-60,thr:-105,unit:'dBm RSRP',rs:-10*Math.log10(12*100),freqs:[800,1800,2100,2600]},
   nr:{name:'5G NR',short:'5G',freq:3500,eirp:30,shape:'diamond',color:'#ef4444',lo:-130,hi:-60,thr:-105,unit:'dBm RSRP',rs:-10*Math.log10(12*273),freqs:[700,3500]}
 };
+const DEV_KEY='signalsketch.devices.v1'; // localStorage key for the user's device library
 const STOPS=['#440154','#482878','#3e4989','#31688e','#26828e','#1f9e89','#35b779','#6ece58','#b5de2b','#fde725'];
 
 /* ============================== state ============================== */
 const state={
   W:1600,H:1000,ppm:20,calibrated:false,img:null,imgData:null,
-  walls:[],markers:[],pins:[],zones:[],
+  walls:[],markers:[],pins:[],zones:[],devices:loadDevLib(),
   model:{wifi24:'walls',wifi5:'walls',lte:'walls',nr:'walls'},losMode:'auto',zoneKind:'machinery',
   materials:Object.fromEntries(Object.entries(MATS).map(([k,m])=>[k,m.v.slice()])),
   offsets:{wifi24:0,wifi5:0,lte:0,nr:0},
@@ -478,7 +522,7 @@ function render(c,v,ratio,exp){
     c.stroke();c.fill();
     c.lineWidth=sel?3:1.5;c.strokeStyle=sel?'#f59e0b':'#111';c.stroke();
     c.restore();
-    label(c,v,m.x,m.y+22/v.k,(m.label||L.short)+' · '+m.eirp+' dBm',false,act?1:.5);
+    label(c,v,m.x,m.y+22/v.k,markerName(m)+' · '+m.eirp+' dBm',false,act?1:.5);
   });
   c.restore();
   // scale bar (screen space)
@@ -498,13 +542,14 @@ function label(c,v,x,y,text,small,alpha=1){
 
 /* ============================== helpers ============================== */
 function setMsg(t){$('msg').textContent=t;}
-function snapJSON(){return JSON.stringify({walls:state.walls,markers:state.markers,pins:state.pins,zones:state.zones,offsets:state.offsets,ppm:state.ppm,calibrated:state.calibrated,materials:state.materials,model:state.model,losMode:state.losMode});}
+function snapJSON(){return JSON.stringify({walls:state.walls,markers:state.markers,pins:state.pins,zones:state.zones,devices:state.devices,offsets:state.offsets,ppm:state.ppm,calibrated:state.calibrated,materials:state.materials,model:state.model,losMode:state.losMode});}
 function snapshot(){
   undoStack.push(snapJSON());
   if(undoStack.length>150) undoStack.shift(); redoStack.length=0;
 }
 function restore(s){
-  const o=JSON.parse(s);Object.assign(state,o);state.sel=null;refreshAll();
+  const o=JSON.parse(s);Object.assign(state,o);state.sel=null;saveDevLib();refreshMarkType();refreshAll();
+  if($('devDlg').open)openDevices(getDev(dvEditing)?dvEditing:null);
 }
 function undo(){if(!undoStack.length)return;redoStack.push(snapJSON());restore(undoStack.pop());}
 function redo(){if(!redoStack.length)return;undoStack.push(snapJSON());restore(redoStack.pop());}
@@ -545,8 +590,8 @@ function resize(){
 function buildStatic(){
   $('wallMat').innerHTML=Object.entries(MATS).map(([k,m])=>`<option value="${k}">${m.name}</option>`).join('');
   $('wallMat').value=state.wallMat;
-  $('markType').innerHTML=Object.entries(LAYERS).map(([k,l])=>`<option value="${k}">${l.name}</option>`).join('');
-  $('markType').value=state.markType;
+  refreshMarkType();
+  $('dvLayer').innerHTML=Object.entries(LAYERS).map(([k,l])=>`<option value="${k}">${l.name}</option>`).join('');
   $('zoneKind').innerHTML=Object.entries(ZONES).map(([k,z])=>`<option value="${k}">${z.name}</option>`).join('');
   $('zoneKind').value=state.zoneKind;
   $('layerBtns').innerHTML=Object.entries(LAYERS).map(([k,l])=>`<button data-layer="${k}"></button>`).join('');
@@ -589,17 +634,21 @@ function refreshSel(){
   p.className='';
   if(s.kind==='marker'){
     const m=state.markers[s.i];if(!m){state.sel=null;return refreshSel();}
-    const L=LAYERS[m.type];
-    p.innerHTML=`<div class="row"><label>Label</label><input id="sLabel" value="${(m.label||'').replace(/"/g,'&quot;')}" placeholder="${L.short}"></div>
+    const L=LAYERS[m.type],d=getDev(m.dev);
+    p.innerHTML=`<div class="row"><label>Label</label><input id="sLabel" value="${esc(m.label||'')}" placeholder="${esc(d?d.name:L.short)}"></div>
+    <div class="row"><label>Device</label><select id="sDev"><option value="">None (own values)</option>${state.devices.map(x=>`<option value="${esc(x.id)}" ${x.id===m.dev?'selected':''}>${esc(x.name)}</option>`).join('')}</select></div>
+    ${d?`<div class="tiny">${esc(d.name)}: ${d.tx} dBm Tx + ${d.gain} dBi − ${d.loss} dB = ${devEirp(d)} dBm EIRP. Changing the type, frequency or EIRP here detaches this marker from the device. <a href="#" id="sDevEdit">Edit device</a></div>`:''}
     <div class="row"><label>Type</label><select id="sType">${Object.entries(LAYERS).map(([k,l])=>`<option value="${k}" ${k===m.type?'selected':''}>${l.name}</option>`).join('')}</select></div>
     <div class="row"><label>Frequency MHz</label><input id="sFreq" type="number" list="fl" value="${m.freq}"><datalist id="fl">${L.freqs.map(f=>`<option value="${f}">`).join('')}</datalist></div>
     <div class="row"><label>EIRP dBm</label><input id="sEirp" type="number" step="1" value="${m.eirp}"></div>
     <div class="tiny">EIRP = transmit power + antenna gain. Typical: router Wi-Fi 20 dBm, indoor small cell 30 dBm, macro tower 60+ dBm (place it outside the plan at its real distance).</div>
     <div class="row"><button class="danger" id="sDel">Delete marker</button></div>`;
     $('sLabel').onchange=e=>{snapshot();m.label=e.target.value;draw();};
-    $('sType').onchange=e=>{snapshot();m.type=e.target.value;const D=LAYERS[m.type];m.freq=D.freq;m.eirp=D.eirp;state.layer=m.type;refreshAll();};
-    $('sFreq').onchange=e=>{snapshot();m.freq=Math.max(100,+e.target.value||m.freq);schedule();};
-    $('sEirp').onchange=e=>{snapshot();m.eirp=+e.target.value;schedule();draw();};
+    $('sDev').onchange=e=>{snapshot();const nd=getDev(e.target.value);if(nd){applyDev(m,nd);state.layer=m.type;}else delete m.dev;refreshAll();};
+    if(d)$('sDevEdit').onclick=e=>{e.preventDefault();openDevices(d.id);};
+    $('sType').onchange=e=>{snapshot();delete m.dev;m.type=e.target.value;const D=LAYERS[m.type];m.freq=D.freq;m.eirp=D.eirp;state.layer=m.type;refreshAll();};
+    $('sFreq').onchange=e=>{snapshot();delete m.dev;m.freq=Math.max(100,+e.target.value||m.freq);refreshSel();schedule();};
+    $('sEirp').onchange=e=>{snapshot();delete m.dev;m.eirp=+e.target.value;refreshSel();schedule();draw();};
     $('sDel').onclick=delSel;
   }else if(s.kind==='wall'){
     const w=state.walls[s.i];if(!w){state.sel=null;return refreshSel();}
@@ -676,7 +725,7 @@ function setTool(t){
   state.tool=t;drawing=null;calib=null;zoneDraw=null;cropDraw=null;
   cv.style.cursor=t==='select'?'default':'crosshair';
   refreshLayerButtons();draw();
-  setMsg({select:'Select: click to select, drag a marker to move it.',wall:'Wall: click points; double-click, right-click or Esc to finish. Shift locks angle.',crop:'Crop: drag a rectangle around the part of the plan you want to keep.',zone:'Equipment zone: drag a rectangle over machinery, racks or tanks. Each metre of path inside adds dB (capped).',marker:'Marker: click to place a '+LAYERS[state.markType].name+' source (can be outside the plan).',calib:'Scale: click two points a known distance apart.',pin:'Measurement: click where you measured the signal.'}[t]);
+  setMsg({select:'Select: click to select, drag a marker to move it.',wall:'Wall: click points; double-click, right-click or Esc to finish. Shift locks angle.',crop:'Crop: drag a rectangle around the part of the plan you want to keep.',zone:'Equipment zone: drag a rectangle over machinery, racks or tanks. Each metre of path inside adds dB (capped).',marker:'Marker: click to place '+(t=>t.dev?'"'+t.dev.name+'" ('+LAYERS[t.layer].name+')':'a '+LAYERS[t.layer].name+' source')(markTypeInfo())+' (can be outside the plan).',calib:'Scale: click two points a known distance apart.',pin:'Measurement: click where you measured the signal.'}[t]);
 }
 cv.addEventListener('contextmenu',e=>{e.preventDefault();if(drawing){drawing=null;draw();}});
 cv.addEventListener('mousedown',e=>{
@@ -703,9 +752,10 @@ cv.addEventListener('mousedown',e=>{
       drawing.last=s;schedule();refreshLayerButtons();
     }
   }else if(t==='marker'){
-    snapshot();const L=LAYERS[state.markType];
-    state.markers.push({x:p.x,y:p.y,type:state.markType,label:'',freq:L.freq,eirp:L.eirp});
-    state.layer=state.markType;state.sel={kind:'marker',i:state.markers.length-1};
+    snapshot();const mt=markTypeInfo(),L=LAYERS[mt.layer];
+    const nm={x:p.x,y:p.y,type:mt.layer,label:'',freq:L.freq,eirp:L.eirp};if(mt.dev)applyDev(nm,mt.dev);
+    state.markers.push(nm);
+    state.layer=mt.layer;state.sel={kind:'marker',i:state.markers.length-1};
     refreshAll();
   }else if(t==='calib'){
     if(!calib||!calib.a){calib={a:{x:p.x,y:p.y}};setMsg('Now click the second point.');}
@@ -781,11 +831,12 @@ function updateHover(e){
   }
   h.style.display='block';
   h.innerHTML=`<b>${b.rx.toFixed(1)} ${L.unit}</b> <span style="color:${ok?'#16a34a':'#dc2626'}">${ok?'≥':'<'} target ${state.thr[state.layer]}</span><br>
-  Best source: ${b.m.src.label||L.short} (${b.m.src.freq} MHz)<br>${body}`+(outA?'<br><span style="color:#d97706">Outside the count area (not in the coverage figure).</span>':'');
+  Best source: ${esc(markerName(b.m.src))} (${b.m.src.freq} MHz)<br>${body}`+(outA?'<br><span style="color:#d97706">Outside the count area (not in the coverage figure).</span>':'');
 }
 
 /* ============================== keyboard ============================== */
 window.addEventListener('keydown',e=>{
+  if($('devDlg').open) return; // the device dialog handles its own keys (Esc closes it)
   if(/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)&&e.key!=='Escape') return;
   if(e.code==='Space'){spaceDown=true;cv.style.cursor='grab';e.preventDefault();return;}
   if(e.ctrlKey&&e.key.toLowerCase()==='z'){undo();e.preventDefault();return;}
@@ -793,7 +844,7 @@ window.addEventListener('keydown',e=>{
   if(e.key==='Escape'){drawing=null;calib=null;draw();setTool('select');return;}
   if(e.key==='Delete'||e.key==='Backspace'){delSel();return;}
   const k=e.key.toLowerCase();
-  if(k==='v')setTool('select');else if(k==='w')setTool('wall');else if(k==='m')setTool('marker');else if(k==='c')setTool('calib');else if(k==='p')setTool('pin');else if(k==='z')setTool('zone');
+  if(k==='v')setTool('select');else if(k==='w')setTool('wall');else if(k==='m')setTool('marker');else if(k==='c')setTool('calib');else if(k==='p')setTool('pin');else if(k==='z')setTool('zone');else if(k==='b')toggleSide();
 });
 window.addEventListener('keyup',e=>{if(e.code==='Space'){spaceDown=false;cv.style.cursor=state.tool==='select'?'default':'crosshair';}});
 
@@ -849,7 +900,7 @@ async function loadPdf(f){
   }catch(err){setMsg('PDF failed ('+err.message+'). Keep the lib folder next to index.html, or export the page as PNG.');}
 }
 function saveProject(){
-  const o={v:2,W:state.W,H:state.H,ppm:state.ppm,calibrated:state.calibrated,imgData:state.imgData,walls:state.walls,markers:state.markers,pins:state.pins,zones:state.zones,materials:state.materials,offsets:state.offsets,thr:state.thr,n:state.n,model:state.model,losMode:state.losMode,area:state.area};
+  const o={v:2,W:state.W,H:state.H,ppm:state.ppm,calibrated:state.calibrated,imgData:state.imgData,walls:state.walls,markers:state.markers,pins:state.pins,zones:state.zones,devices:state.devices,materials:state.materials,offsets:state.offsets,thr:state.thr,n:state.n,model:state.model,losMode:state.losMode,area:state.area};
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(o)],{type:'application/json'}));a.download='signalsketch-project.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
 }
 function loadProject(f){
@@ -858,6 +909,7 @@ function loadProject(f){
       const o=JSON.parse(r.result);
       const apply=()=>{const defMats=Object.fromEntries(Object.entries(MATS).map(([k,m])=>[k,m.v.slice()]));
         Object.assign(state,{ppm:o.ppm,calibrated:!!o.calibrated,walls:o.walls||[],markers:o.markers||[],pins:o.pins||[],zones:o.zones||[],materials:Object.assign(defMats,o.materials||{}),offsets:o.offsets||state.offsets,thr:o.thr||state.thr,n:o.n||2.2,model:Object.assign({wifi24:'walls',wifi5:'walls',lte:'walls',nr:'walls'},o.model||{}),losMode:o.losMode||'auto',area:o.area||'plan',sel:null});autoPrev=null;
+        mergeDevices(o.devices);saveDevLib();refreshMarkType();
         undoStack.length=0;redoStack.length=0;$('adInfo').textContent='';$('apInfo').textContent='';refreshAll();fit();setMsg('Project loaded.');};
       if(o.imgData) setImage(o.imgData,apply); else {state.img=null;state.imgData=null;state.W=o.W||1600;state.H=o.H||1000;apply();}
     }catch(err){setMsg('Not a valid project file.');}
@@ -1094,8 +1146,10 @@ function suggestAPs(){
   const target=Math.min(100,Math.max(1,+$('apTarget').value||95))/100;
   const maxNew=Math.min(60,Math.max(1,Math.round(+$('apMax').value||12)));
   const keep=$('apKeep').checked,avoid=$('apZones').checked;
+  const mt=markTypeInfo(),pd=mt.dev&&mt.dev.layer===layer?mt.dev:null; // device chosen in the toolbar, if it is on this layer
   const ref=state.markers.find(m=>m.type===layer);
-  const freq=ref?ref.freq:L.freq,eIn=$('apEirp').value,eirp=(eIn!==''&&!isNaN(+eIn))?+eIn:(ref?ref.eirp:L.eirp);
+  const freq=pd?pd.freq:(ref?ref.freq:L.freq),eIn=$('apEirp').value,eirp=(eIn!==''&&!isNaN(+eIn))?+eIn:(pd?devEirp(pd):(ref?ref.eirp:L.eirp));
+  const apDev=pd&&eirp===devEirp(pd)?pd.id:undefined;
   // evaluation points: cell centres over the plan (same area basis as the coverage figure)
   const ecell=Math.max(1,Math.sqrt(state.W*state.H/6000)),ex=[],ey=[];
   const MK=areaMask(),inA=(MK&&MK.inside>0)?(x,y)=>MK.at(x,y):()=>true;
@@ -1186,12 +1240,12 @@ function suggestAPs(){
     snapshot();
     if(!keep)state.markers=state.markers.filter(m=>m.type!==layer);
     const used=new Set(state.markers.filter(m=>m.auto).map(m=>m.label));let n=1;
-    sel.forEach(s=>{while(used.has('S'+n))n++;used.add('S'+n);state.markers.push({x:cx[s],y:cy[s],type:layer,label:'S'+n,freq,eirp,auto:true});});
+    sel.forEach(s=>{while(used.has('S'+n))n++;used.add('S'+n);state.markers.push({x:cx[s],y:cy[s],type:layer,label:'S'+n,freq,eirp,auto:true,dev:apDev});});
     state.sel=null;refreshAll();
     const pct=v=>(100*v/N).toFixed(0)+' %';
     const reached=fin>=need;
     done('');
-    $('apInfo').innerHTML=`Added <b>${sel.length}</b> ${L.short} marker${sel.length>1?'s':''} (${eirp} dBm, ${freq} MHz). Area ≥ ${thr} ${L.unit}: <b>${pct(start)} → ${pct(fin)}</b>`+
+    $('apInfo').innerHTML=`Added <b>${sel.length}</b> ${L.short} marker${sel.length>1?'s':''} (${apDev?esc(pd.name)+', ':''}${eirp} dBm, ${freq} MHz). Area ≥ ${thr} ${L.unit}: <b>${pct(start)} → ${pct(fin)}</b>`+
       `${reached?'':` <span style="color:#dc2626">(target ${Math.round(target*100)} % not reached; raise the limit or the EIRP)</span>`}.<br>`+
       `Greedy steps: ${trace.map(pct).join(', ')}. Refinement moved ${moved}, pruned ${pruned}.<br>`+
       `Grid ${(sp/state.ppm).toFixed(1)} m, ${C} candidate spots, ${N} test points. The coverage figure above uses a finer grid, so it can differ by a percent or so. Undo (Ctrl+Z) reverts.`;
@@ -1205,17 +1259,125 @@ function removeSuggested(){
   $('apInfo').textContent=`Removed ${n} suggested markers.`;refreshAll();
 }
 
+/* ============================== custom devices ============================== */
+// A device is a named transmitter profile. Markers placed from it keep a link (m.dev) and follow later edits.
+let dvEditing=null; // id of the device in the editor, or null for a new one
+function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function newDevId(){return 'd'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);}
+function devEirp(d){return Math.round((d.tx+d.gain-d.loss)*10)/10;}
+function getDev(id){return id?state.devices.find(d=>d.id===id)||null:null;}
+function cleanDev(d){ // validate a device read from storage or a file
+  if(!d||typeof d!=='object'||!LAYERS[d.layer])return null;
+  const num=(v,def)=>(v!==''&&v!=null&&Number.isFinite(+v))?+v:def,L=LAYERS[d.layer];
+  return {id:String(d.id||newDevId()).slice(0,40),name:String(d.name||'Device').trim().slice(0,60)||'Device',layer:d.layer,
+    freq:Math.max(100,num(d.freq,L.freq)),tx:num(d.tx,L.eirp),gain:num(d.gain,0),loss:Math.max(0,num(d.loss,0))};
+}
+function loadDevLib(){try{const a=JSON.parse(localStorage.getItem(DEV_KEY)||'[]');return Array.isArray(a)?a.map(cleanDev).filter(Boolean):[];}catch(e){return[];}}
+function saveDevLib(){try{localStorage.setItem(DEV_KEY,JSON.stringify(state.devices));}catch(e){}}
+function mergeDevices(list){ // add or replace by id, then bring linked markers up to date
+  let n=0;(Array.isArray(list)?list:[]).map(cleanDev).filter(Boolean).forEach(d=>{const i=state.devices.findIndex(x=>x.id===d.id);if(i>=0)state.devices[i]=d;else state.devices.push(d);n++;});
+  state.markers.forEach(m=>{const d=getDev(m.dev);if(d)applyDev(m,d);});return n;
+}
+function applyDev(m,d){m.dev=d.id;m.type=d.layer;m.freq=d.freq;m.eirp=devEirp(d);}
+function markerName(m){const d=getDev(m.dev);return m.label||(d?d.name:LAYERS[m.type].short);}
+function markTypeInfo(){ // what "Place marker" creates: a generic layer type or one of the user's devices
+  if(String(state.markType).startsWith('dev:')){const d=getDev(state.markType.slice(4));if(d)return{layer:d.layer,dev:d};state.markType=state.layer;}
+  if(!LAYERS[state.markType])state.markType='wifi24';
+  return {layer:state.markType,dev:null};
+}
+function refreshMarkType(){
+  markTypeInfo();
+  $('markType').innerHTML=`<optgroup label="Generic">${Object.entries(LAYERS).map(([k,l])=>`<option value="${k}">${l.name}</option>`).join('')}</optgroup>`+
+    (state.devices.length?`<optgroup label="My devices">${state.devices.map(d=>`<option value="dev:${esc(d.id)}">${esc(d.name)} · ${LAYERS[d.layer].short} · ${devEirp(d)} dBm</option>`).join('')}</optgroup>`:'')+
+    `<option value="__new">+ New device…</option>`;
+  $('markType').value=state.markType;
+}
+function dvForm(){return cleanDev({id:dvEditing||'x',name:$('dvName').value,layer:$('dvLayer').value,freq:$('dvFreq').value,tx:$('dvTx').value,gain:$('dvGain').value,loss:$('dvLoss').value});}
+function dvFill(d){
+  $('dvName').value=d.name;$('dvLayer').value=d.layer;$('dvFreq').value=d.freq;$('dvTx').value=d.tx;$('dvGain').value=d.gain;$('dvLoss').value=d.loss;
+  dvLayerChanged(false);dvUpdate();
+}
+function dvLayerChanged(setFreq){
+  const L=LAYERS[$('dvLayer').value];$('dvFl').innerHTML=L.freqs.map(f=>`<option value="${f}">`).join('');
+  if(setFreq)$('dvFreq').value=L.freq;
+}
+function dvUpdate(){
+  const d=dvForm();$('dvEirp').textContent=d?devEirp(d):'–';
+  const n=dvEditing?state.markers.filter(m=>m.dev===dvEditing).length:0;
+  $('dvUse').textContent=dvEditing?(n?`${n} marker${n>1?'s use':' uses'} this device. Saving updates ${n>1?'them':'it'}.`:'No markers use this device yet.'):'New device: not saved yet.';
+  $('dvDel').disabled=!dvEditing;$('dvDup').disabled=!dvEditing;
+}
+function dvRenderList(){
+  $('dvList').innerHTML=state.devices.length?state.devices.map(d=>{const n=state.markers.filter(m=>m.dev===d.id).length;
+    return `<button type="button" class="dvItem ${d.id===dvEditing?'on':''}" data-dv="${esc(d.id)}"><b>${esc(d.name)}</b><span class="tiny">${LAYERS[d.layer].short} · ${d.freq} MHz · ${devEirp(d)} dBm EIRP${n?` · ${n} placed`:''}</span></button>`;}).join('')
+    :'<div class="dvEmpty tiny">No devices yet. Fill in the form and press <b>Save device</b>. Saved devices appear in the marker selector in the toolbar.</div>';
+}
+function openDevices(id){ // id: device to edit, null: new device, undefined: first device (or a new one)
+  if(id===undefined)id=state.devices.length?state.devices[0].id:null;
+  const d=getDev(id);dvEditing=d?d.id:null;
+  if(d)dvFill(d);
+  else{const layer=markTypeInfo().layer,L=LAYERS[layer];dvFill({name:'',layer,freq:L.freq,tx:L.eirp,gain:0,loss:0});}
+  dvRenderList();if(!$('devDlg').open)$('devDlg').showModal();
+  if(!d)$('dvName').focus();
+}
+function dvSave(){
+  const d=dvForm();if(!d)return;
+  if(!$('dvName').value.trim()){$('dvName').focus();$('dvName').placeholder='Give the device a name';return;}
+  snapshot();
+  if(dvEditing){const i=state.devices.findIndex(x=>x.id===dvEditing);state.devices[i]=d;}
+  else{d.id=newDevId();state.devices.push(d);dvEditing=d.id;}
+  let n=0;state.markers.forEach(m=>{if(m.dev===d.id){applyDev(m,d);n++;}});
+  state.markType='dev:'+d.id;state.layer=d.layer; // ready to place it
+  saveDevLib();refreshMarkType();refreshAll();dvRenderList();dvUpdate();
+  setMsg(`Saved device "${d.name}"${n?`, updated ${n} marker${n>1?'s':''}`:''}. It is selected for Place marker (M).`);
+}
+function dvDelete(){
+  const d=getDev(dvEditing);if(!d)return;
+  const n=state.markers.filter(m=>m.dev===d.id).length;
+  if(!confirm(`Delete the device "${d.name}"?${n?` ${n} marker${n>1?'s keep their':' keeps its'} current values.`:''}`))return;
+  snapshot();state.markers.forEach(m=>{if(m.dev===d.id)delete m.dev;});
+  state.devices=state.devices.filter(x=>x.id!==d.id);
+  saveDevLib();refreshMarkType();refreshAll();openDevices(undefined);setMsg(`Deleted device "${d.name}".`);
+}
+function dvDuplicate(){
+  const d=dvForm();if(!d)return;dvEditing=null;dvFill({...d,name:(d.name+' copy').slice(0,60)});dvRenderList();$('dvName').focus();$('dvName').select();
+}
+function dvExport(){
+  if(!state.devices.length){setMsg('No devices to export yet.');return;}
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify({signalsketchDevices:1,devices:state.devices},null,2)],{type:'application/json'}));
+  a.download='signalsketch-devices.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+}
+function dvImport(f){
+  const r=new FileReader();r.onload=()=>{
+    let list;try{const o=JSON.parse(r.result);list=Array.isArray(o)?o:(o.devices||[]);}catch(e){setMsg('Not a valid device file.');return;}
+    if(!list.map(cleanDev).some(Boolean)){setMsg('No devices found in that file.');return;}
+    snapshot();const n=mergeDevices(list);
+    saveDevLib();refreshMarkType();refreshAll();openDevices(getDev(dvEditing)?dvEditing:undefined);setMsg(`Imported ${n} device${n>1?'s':''}.`);
+  };r.readAsText(f);
+}
+$('dvList').addEventListener('click',e=>{const b=e.target.closest('[data-dv]');if(b)openDevices(b.dataset.dv);});
+$('dvLayer').onchange=()=>{dvLayerChanged(true);dvUpdate();};
+['dvName','dvFreq','dvTx','dvGain','dvLoss'].forEach(id=>$(id).addEventListener('input',dvUpdate));
+$('dvName').addEventListener('keydown',e=>{if(e.key==='Enter')dvSave();});
+$('dvSave').onclick=dvSave;$('dvDel').onclick=dvDelete;$('dvDup').onclick=dvDuplicate;
+$('dvNew').onclick=()=>openDevices(null);$('dvClose').onclick=()=>$('devDlg').close();
+$('dvExport').onclick=dvExport;$('dvImport').onclick=()=>$('fDev').click();
+$('fDev').onchange=e=>{if(e.target.files[0])dvImport(e.target.files[0]);e.target.value='';};
+$('devDlg').addEventListener('click',e=>{if(e.target===$('devDlg'))$('devDlg').close();}); // a click on the backdrop closes
+
 /* ============================== wiring ============================== */
 $('area').onchange=e=>{state.area=e.target.value;schedule();};
 $('apRun').onclick=suggestAPs;$('apStop').onclick=()=>{if(apJob)apJob.stop=true;};$('apRemove').onclick=removeSuggested;
 buildStatic();
 document.querySelectorAll('[data-tool]').forEach(b=>b.onclick=()=>setTool(b.dataset.tool));
-$('layerBtns').addEventListener('click',e=>{const b=e.target.closest('[data-layer]');if(!b)return;state.layer=b.dataset.layer;state.markType=state.layer;$('markType').value=state.markType;refreshLayerButtons();refreshLegend();refreshModel();updateStats();schedule();});
+$('layerBtns').addEventListener('click',e=>{const b=e.target.closest('[data-layer]');if(!b)return;state.layer=b.dataset.layer;if(markTypeInfo().layer!==state.layer)state.markType=state.layer;$('markType').value=state.markType;refreshLayerButtons();refreshLegend();refreshModel();updateStats();schedule();});
 $('model').onchange=e=>{snapshot();state.model[state.layer]=e.target.value;refreshModel();schedule();};
 $('losMode').onchange=e=>{snapshot();state.losMode=e.target.value;schedule();};
 $('zoneKind').onchange=e=>{state.zoneKind=e.target.value;};
 $('wallMat').onchange=e=>{state.wallMat=e.target.value;if(state.sel&&state.sel.kind==='wall'){}};
-$('markType').onchange=e=>{state.markType=e.target.value;state.layer=state.markType;refreshLayerButtons();refreshLegend();schedule();if(state.tool==='marker')setTool('marker');};
+$('markType').onchange=e=>{const v=e.target.value;if(v==='__new'){$('markType').value=state.markType;openDevices(null);return;}
+  state.markType=v;state.layer=markTypeInfo().layer;refreshLayerButtons();refreshLegend();refreshModel();schedule();if(state.tool==='marker')setTool('marker');};
+$('bDevices').onclick=()=>{const t=markTypeInfo();openDevices(t.dev?t.dev.id:undefined);};
 $('opac').oninput=e=>{state.opacity=+e.target.value;draw();};
 $('style').onchange=e=>{state.banded=e.target.value==='banded';schedule();};
 $('thr').onchange=e=>{state.thr[state.layer]=+e.target.value;refreshLegend();schedule();};
@@ -1233,8 +1395,18 @@ $('bUndo').onclick=undo;$('bRedo').onclick=redo;$('bFit').onclick=fit;
 const wrap=$('wrap');
 wrap.addEventListener('dragover',e=>e.preventDefault());
 wrap.addEventListener('drop',e=>{e.preventDefault();loadFile(e.dataTransfer.files[0]);});
+function setSide(show){ // hide or show the left panel; the plan stays centred where it was
+  const w0=$('wrap').clientWidth,h0=$('wrap').clientHeight;
+  document.body.classList.toggle('noSide',!show);
+  const b=$('bSide');b.textContent=show?'◀':'▶';b.title=(show?'Hide':'Show')+' the sidebar (B)';b.setAttribute('aria-expanded',String(show));
+  view.x+=($('wrap').clientWidth-w0)/2;view.y+=($('wrap').clientHeight-h0)/2;resize();
+  try{localStorage.setItem('signalsketch.sidebar',show?'1':'0');}catch(e){}
+}
+function toggleSide(){setSide(document.body.classList.contains('noSide'));}
+$('bSide').onclick=toggleSide;
 window.addEventListener('resize',resize);
 matchMedia('(prefers-color-scheme:dark)').addEventListener('change',draw);
+try{if(localStorage.getItem('signalsketch.sidebar')==='0'){document.body.classList.add('noSide');$('bSide').textContent='▶';$('bSide').title='Show the sidebar (B)';$('bSide').setAttribute('aria-expanded','false');}}catch(e){}
 resize();refreshAll();fit();setTool('select');
 </script>
 </body>
