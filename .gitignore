@@ -1,0 +1,12 @@
+# Whitelist: only the files needed to run the tool are tracked.
+# Floor plans, project files, notes and specs in this folder stay local.
+*
+!.gitignore
+!.nojekyll
+!index.html
+!README.md
+!LICENSE
+!lib/
+!lib/pdfjs/
+!lib/pdfjs/pdf.min.js
+!lib/pdfjs/pdf.worker.min.js
