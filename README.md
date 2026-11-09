@@ -10,11 +10,11 @@ There is nothing to install, no account, and no server: your floor plans never l
 | Option | What to do |
 |---|---|
 | **Online (no download)** | Open **https://beleonattila.github.io/SignalSketch/** |
-| **Offline / portable** | Download [**SignalSketch.zip**](https://github.com/beleonattila/SignalSketch/releases/latest/download/SignalSketch.zip), unzip it anywhere (Desktop, Documents, a USB stick), and double-click `index.html`. |
+| **Offline / portable** | Download [**SignalSketch.zip**](https://github.com/beleonattila/SignalSketch/releases/latest/download/SignalSketch.zip), unzip it anywhere (Desktop, Documents, a USB stick), and double-click `SignalSketch.html`. |
 
 Both work on a locked-down company laptop: no admin rights, no installer, no runtime.
 Any current browser does the job (Edge, Chrome, Firefox).
-The offline copy works without internet too, including PDF import, as long as the `lib` folder stays next to `index.html`.
+The offline copy works without internet too, including PDF import, as long as the `lib` folder stays next to `SignalSketch.html`.
 
 ## Quick start
 

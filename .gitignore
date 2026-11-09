@@ -3,6 +3,8 @@
 *
 !.gitignore
 !.nojekyll
+!SignalSketch.html
+# index.html only redirects the GitHub Pages root to SignalSketch.html.
 !index.html
 !README.md
 !LICENSE
